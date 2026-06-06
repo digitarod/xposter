@@ -23,9 +23,30 @@ def browser_page(storage_state: Path | None, headless: bool = True):
 
     storage_state に既存セッションファイルを渡すとログイン状態を復元する。
     None の場合(初回ログイン時)はまっさらな状態で開く。
+
+    自動化検知(navigator.webdriver 等)を緩和するため、Automation系フラグを外し、
+    可能なら実Chrome/Edgeチャンネルを使う。
     """
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
+        launch_kwargs = dict(
+            headless=headless,
+            args=["--disable-blink-features=AutomationControlled"],
+            ignore_default_args=["--enable-automation"],
+        )
+        # 実ブラウザがあればそれを使う(検知されにくい)。なければ同梱Chromium。
+        browser = None
+        for channel in ("chrome", "msedge", None):
+            try:
+                if channel:
+                    browser = p.chromium.launch(channel=channel, **launch_kwargs)
+                else:
+                    browser = p.chromium.launch(**launch_kwargs)
+                break
+            except Exception:
+                continue
+        if browser is None:
+            raise RuntimeError("ブラウザを起動できませんでした。")
+
         context = browser.new_context(
             storage_state=str(storage_state) if storage_state else None,
             locale="ja-JP",
@@ -36,6 +57,10 @@ def browser_page(storage_state: Path | None, headless: bool = True):
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
             viewport={"width": 1280, "height": 900},
+        )
+        # navigator.webdriver を消すなど、自動化の痕跡を隠す
+        context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
         )
         context.set_default_navigation_timeout(config.NAV_TIMEOUT_MS)
         context.set_default_timeout(config.ACTION_TIMEOUT_MS)
