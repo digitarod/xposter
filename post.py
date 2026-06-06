@@ -119,6 +119,9 @@ def run_schedule() -> int:
 
 
 def run_single(text: str) -> int:
+    # GitHub Actions の入力欄は1行のため、リテラルの "\n" を実際の改行に変換する。
+    # (schedule.json 経由ではJSONの \n がそのまま改行になるので変換不要)
+    text = text.replace("\\n", "\n")
     storage = config.resolve_storage_state()
     if not storage.exists():
         print("[x] セッションファイルがありません。", file=sys.stderr)
