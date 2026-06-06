@@ -11,3 +11,7 @@ venv/
 # Playwright
 playwright-report/
 test-results/
+
+# 作業用メモ(リポジトリには含めない)
+memory/
+MEMORY.md

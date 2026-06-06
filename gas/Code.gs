@@ -7,6 +7,8 @@
  *   3. postTextToX(text) が GitHub の workflow_dispatch API を叩いて起動
  *   4. GitHub Actions 側が post.py --text "..." を実行してXに投稿
  *
+ * (アフィリエイト用途は gas/AffilTweet.gs を使う。別プロジェクト想定)
+ *
  * 事前設定(スクリプトプロパティ):
  *   GITHUB_TOKEN : GitHub Personal Access Token
  *                  (fine-grained: 対象リポに Actions=Read and write 権限)
@@ -39,7 +41,7 @@ function generateText() {
  * メイン: テキストを生成して投稿する。
  * これを時間主導トリガーに登録する。
  */
-function postToX() {
+function runScheduledPost() {
   const text = generateText();
   postTextToX(text);
 }
