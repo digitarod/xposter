@@ -1,0 +1,65 @@
+name: X auto post
+
+on:
+  # 定期実行: 15分おきにキューをチェックし、予約時刻が来た投稿を実行する。
+  # cron は UTC。GitHub Actions の cron は数分の遅延が出ることがある。
+  schedule:
+    - cron: "*/15 * * * *"
+  # 手動実行(任意のテキストを単発投稿できる)
+  workflow_dispatch:
+    inputs:
+      text:
+        description: "単発投稿するテキスト(空ならキューを処理)"
+        required: false
+        default: ""
+
+# schedule.json の posted フラグをコミットして戻すため書き込み権限が必要
+permissions:
+  contents: write
+
+# 同時実行を防ぐ(二重投稿対策)
+concurrency:
+  group: x-auto-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Post
+        env:
+          AUTH_STATE_B64: ${{ secrets.AUTH_STATE_B64 }}
+          HEADLESS: "1"
+          # シェルへ直接埋め込まず env 経由で渡す(スクリプトインジェクション対策)
+          POST_TEXT: ${{ github.event.inputs.text }}
+        run: |
+          if [ -n "$POST_TEXT" ]; then
+            python post.py --text "$POST_TEXT"
+          else
+            python post.py
+          fi
+
+      - name: Commit schedule updates
+        if: ${{ github.event.inputs.text == '' }}
+        run: |
+          if ! git diff --quiet -- schedule.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add schedule.json
+            git commit -m "chore: mark posted tweets [skip ci]"
+            git push
+          else
+            echo "schedule.json に変更なし"
+          fi

@@ -1,0 +1,13 @@
+# ログインセッション。絶対にコミットしないこと(Cookie=ログイン情報そのもの)
+auth_state.json
+.auth_state.runtime.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Playwright
+playwright-report/
+test-results/
