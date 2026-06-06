@@ -87,8 +87,12 @@ def is_logged_in(page: Page) -> bool:
         return False
 
 
-def post_tweet(page: Page, text: str) -> None:
-    """ホームのインライン作成欄からテキストを投稿する。"""
+def post_tweet(page: Page, text: str, image_paths: list | None = None) -> None:
+    """ホームのインライン作成欄から投稿する。
+
+    image_paths が指定されたときだけ画像を添付する(media.py を遅延import)。
+    指定が無ければテキストのみ投稿し、画像処理は一切実行しない。
+    """
     page.goto(config.X_HOME, wait_until="domcontentloaded")
 
     # 作成欄が出るまで待つ。出なければ未ログインとみなす。
@@ -104,6 +108,12 @@ def post_tweet(page: Page, text: str) -> None:
     editor.click()
     # 1文字ずつ入力して人間らしく(かつ確実にイベントを発火させる)
     page.keyboard.type(text, delay=20)
+
+    # 画像が指定されている場合のみ、分離した media モジュールで添付する。
+    if image_paths:
+        import media  # オプション機能。テキストのみのときは読み込まない。
+
+        media.attach_images(page, image_paths)
 
     # Ctrl+Enter で送信(Xの標準ショートカット)。ボタンクリックより安定。
     page.keyboard.press("Control+Enter")

@@ -94,9 +94,10 @@ def run_schedule() -> int:
     with browser_page(storage, headless=config.HEADLESS) as (context, page):
         for n, idx in enumerate(targets):
             text = items[idx]["text"]
+            images = resolve_images(items[idx].get("images"))
             print(f"[{n+1}/{len(targets)}] 投稿します: {text!r}")
             try:
-                post_tweet(page, text)
+                post_tweet(page, text, images)
             except NotLoggedInError as e:
                 print(f"[x] {e}", file=sys.stderr)
                 # ここで止める。残りは次回に持ち越し。
@@ -118,7 +119,20 @@ def run_schedule() -> int:
     return 0 if posted_any else 0
 
 
-def run_single(text: str) -> int:
+def resolve_images(raw):
+    """画像パス指定を実在ファイルのリストに変換する(オプション機能)。
+
+    指定が無ければ空リストを返し、media モジュールも読み込まない
+    (=テキストのみ投稿)。
+    """
+    if not raw:
+        return []
+    import media  # 画像指定があるときだけ読み込む
+
+    return media.resolve_image_paths(list(raw))
+
+
+def run_single(text: str, images: list[str] | None = None) -> int:
     # GitHub Actions の入力欄は1行のため、リテラルの "\n" を実際の改行に変換する。
     # (schedule.json 経由ではJSONの \n がそのまま改行になるので変換不要)
     text = text.replace("\\n", "\n")
@@ -126,10 +140,11 @@ def run_single(text: str) -> int:
     if not storage.exists():
         print("[x] セッションファイルがありません。", file=sys.stderr)
         return 2
+    image_paths = resolve_images(images)
     with browser_page(storage, headless=config.HEADLESS) as (context, page):
         print(f"投稿します: {text!r}")
         try:
-            post_tweet(page, text)
+            post_tweet(page, text, image_paths)
         except NotLoggedInError as e:
             print(f"[x] {e}", file=sys.stderr)
             return 3
@@ -142,10 +157,15 @@ def main() -> int:
     parser.add_argument(
         "--text", help="単発投稿するテキスト(指定時は schedule.json を使わない)"
     )
+    parser.add_argument(
+        "--images",
+        help="(任意)添付画像。カンマ区切りでパス指定。例: images/a.png,images/b.png",
+    )
     args = parser.parse_args()
 
     if args.text:
-        return run_single(args.text)
+        images = [s.strip() for s in args.images.split(",")] if args.images else None
+        return run_single(args.text, images)
     return run_schedule()
 
 

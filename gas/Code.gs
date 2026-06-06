@@ -49,9 +49,11 @@ function postToX() {
  * X APIは使わず、GitHub Actions(Playwright)を起動して投稿する。
  * 関数名・引数は従来どおりなので、呼び出し側はそのまま使える。
  * @param {string} posttext 投稿するテキスト(URL・改行 \n も可)
+ * @param {string} [images] (任意)添付画像。カンマ区切りのリポジトリ内パス。
+ *                          省略すればテキストのみ投稿。例: "images/a.png,images/b.png"
  * @return {boolean} 起動成功で true
  */
-function postTextToX(posttext) {
+function postTextToX(posttext, images) {
   Logger.log('Xへの投稿(ワークフロー起動)を開始します');
 
   const props = PropertiesService.getScriptProperties();
@@ -65,6 +67,12 @@ function postTextToX(posttext) {
     throw new Error('スクリプトプロパティ GITHUB_TOKEN / GITHUB_OWNER / GITHUB_REPO を設定してください。');
   }
 
+  // 画像はオプション。指定があるときだけ inputs に含める(無ければテキストのみ)。
+  const inputs = { text: posttext };
+  if (images) {
+    inputs.images = images;
+  }
+
   const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`;
   const response = UrlFetchApp.fetch(url, {
     method: 'post',
@@ -74,7 +82,7 @@ function postTextToX(posttext) {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
     },
-    payload: JSON.stringify({ ref: ref, inputs: { text: posttext } }),
+    payload: JSON.stringify({ ref: ref, inputs: inputs }),
     muteHttpExceptions: true,
   });
 

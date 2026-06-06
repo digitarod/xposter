@@ -12,6 +12,10 @@ on:
         description: "単発投稿するテキスト(空ならキューを処理)"
         required: false
         default: ""
+      images:
+        description: "(任意)添付画像。カンマ区切りのリポジトリ内パス。例: images/a.png"
+        required: false
+        default: ""
 
 # schedule.json の posted フラグをコミットして戻すため書き込み権限が必要
 permissions:
@@ -44,9 +48,14 @@ jobs:
           HEADLESS: "1"
           # シェルへ直接埋め込まず env 経由で渡す(スクリプトインジェクション対策)
           POST_TEXT: ${{ github.event.inputs.text }}
+          POST_IMAGES: ${{ github.event.inputs.images }}
         run: |
           if [ -n "$POST_TEXT" ]; then
-            python post.py --text "$POST_TEXT"
+            if [ -n "$POST_IMAGES" ]; then
+              python post.py --text "$POST_TEXT" --images "$POST_IMAGES"
+            else
+              python post.py --text "$POST_TEXT"
+            fi
           else
             python post.py
           fi
