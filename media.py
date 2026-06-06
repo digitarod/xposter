@@ -6,6 +6,9 @@
 """
 from __future__ import annotations
 
+import mimetypes
+import tempfile
+import urllib.request
 from pathlib import Path
 
 from playwright.sync_api import Page, TimeoutError as PWTimeout
@@ -22,15 +25,61 @@ ATTACHMENT_MARKER = (
 # Xの画像添付は1ツイート最大4枚
 MAX_IMAGES = 4
 
+# URLダウンロード時のUA(商品画像サーバが素のリクエストを弾くことがあるため)
+_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+# 拡張子が判別できないときの既定
+_DEFAULT_EXT = ".jpg"
+# ダウンロード画像の一時保存先(GitHub Actionsでは実行ごとに破棄される)
+_TMP_DIR = Path(tempfile.gettempdir()) / "xposter_media"
+
+
+def _is_url(value: str) -> bool:
+    return value.startswith("http://") or value.startswith("https://")
+
+
+def _download_image(url: str, index: int) -> Path | None:
+    """画像URLをダウンロードして一時ファイルのパスを返す。失敗時 None。"""
+    _TMP_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            if resp.status != 200:
+                print(f"[warn] 画像取得失敗(HTTP {resp.status})のためスキップ: {url}")
+                return None
+            ctype = resp.headers.get("Content-Type", "")
+            data = resp.read()
+        ext = mimetypes.guess_extension(ctype.split(";")[0].strip()) or _DEFAULT_EXT
+        # jpeg は .jpe になることがあるので正規化
+        if ext == ".jpe":
+            ext = ".jpg"
+        dest = _TMP_DIR / f"img_{index}{ext}"
+        dest.write_bytes(data)
+        print(f"    画像ダウンロード: {url} ({len(data)} bytes)")
+        return dest
+    except Exception as e:  # noqa: BLE001 ネットワーク系の各種例外をまとめて処理
+        print(f"[warn] 画像取得に失敗したためスキップ: {url} ({e})")
+        return None
+
 
 def resolve_image_paths(raw_paths: list[str]) -> list[Path]:
-    """指定パスのうち、実在するファイルだけを返す(最大4枚)。
+    """画像指定をローカルの実ファイルパスに解決する(最大4枚)。
 
-    存在しないものは警告して除外する。1枚も無ければ空リスト。
+    各要素は次のどちらでもよい:
+      - URL (http/https): 実行時にダウンロードして一時ファイル化する
+      - ローカルパス     : リポジトリ内などの実ファイル
+    解決できないものは警告して除外する。1枚も無ければ空リスト。
     """
     resolved: list[Path] = []
-    for raw in raw_paths:
+    for i, raw in enumerate(raw_paths):
         if not raw:
+            continue
+        if _is_url(raw):
+            downloaded = _download_image(raw, i)
+            if downloaded:
+                resolved.append(downloaded)
             continue
         p = Path(raw)
         if not p.is_absolute():

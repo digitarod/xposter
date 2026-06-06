@@ -49,8 +49,12 @@ function postToX() {
  * X APIは使わず、GitHub Actions(Playwright)を起動して投稿する。
  * 関数名・引数は従来どおりなので、呼び出し側はそのまま使える。
  * @param {string} posttext 投稿するテキスト(URL・改行 \n も可)
- * @param {string} [images] (任意)添付画像。カンマ区切りのリポジトリ内パス。
- *                          省略すればテキストのみ投稿。例: "images/a.png,images/b.png"
+ * @param {string} [images] (任意)添付画像。カンマ区切りで指定。省略すればテキストのみ。
+ *                          各要素は次のどちらでもよい:
+ *                            - 画像URL    : 例 "https://example.com/item.jpg"
+ *                                          (投稿側が実行時にダウンロードして添付)
+ *                            - リポジトリ内パス: 例 "images/a.png"
+ *                          アフィリ商品画像など動的URLはそのまま渡せる。
  * @return {boolean} 起動成功で true
  */
 function postTextToX(posttext, images) {
@@ -102,4 +106,20 @@ function postTextToX(posttext, images) {
  */
 function testTrigger() {
   postTextToX('GASからのテスト投稿です\nhttps://example.com #テスト');
+}
+
+/**
+ * AffilTweet 互換の例: 本文 + アフィリURL + (任意)商品画像URL を投稿する。
+ * 既存の postToX(content, url) / postToXWithImage(content, url, imageUrl) は
+ * この形に置き換えれば、X APIを使わずに同じことができる。
+ *
+ * @param {string} content  本文
+ * @param {string} url      アフィリエイトリンク
+ * @param {string} [imageUrl] 商品画像URL(省略でテキストのみ)
+ */
+function postAffiliate(content, url, imageUrl) {
+  // 本文末尾にアフィリURLを付ける(従来の組み立てと同じ)
+  const text = content + '\n\n' + url;
+  // 画像URLがあれば渡す。無ければテキストのみ投稿。
+  return postTextToX(text, imageUrl || undefined);
 }
