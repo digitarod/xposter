@@ -4,7 +4,7 @@
  * 仕組み:
  *   1. 時間主導トリガーで postToX() が定期実行される
  *   2. generateText() で投稿文を生成
- *   3. GitHub の workflow_dispatch API を叩き、text を渡してワークフロー起動
+ *   3. postTextToX(text) が GitHub の workflow_dispatch API を叩いて起動
  *   4. GitHub Actions 側が post.py --text "..." を実行してXに投稿
  *
  * 事前設定(スクリプトプロパティ):
@@ -36,19 +36,24 @@ function generateText() {
 }
 
 /**
- * メイン: テキストを生成して GitHub Actions を起動する。
+ * メイン: テキストを生成して投稿する。
  * これを時間主導トリガーに登録する。
  */
 function postToX() {
   const text = generateText();
-  triggerWorkflow(text);
+  postTextToX(text);
 }
 
 /**
- * GitHub の workflow_dispatch を叩いてワークフローを起動する。
- * @param {string} text 投稿するテキスト
+ * 渡されたテキストをXに投稿する。
+ * X APIは使わず、GitHub Actions(Playwright)を起動して投稿する。
+ * 関数名・引数は従来どおりなので、呼び出し側はそのまま使える。
+ * @param {string} posttext 投稿するテキスト(URL・改行 \n も可)
+ * @return {boolean} 起動成功で true
  */
-function triggerWorkflow(text) {
+function postTextToX(posttext) {
+  Logger.log('Xへの投稿(ワークフロー起動)を開始します');
+
   const props = PropertiesService.getScriptProperties();
   const token = props.getProperty('GITHUB_TOKEN');
   const owner = props.getProperty('GITHUB_OWNER');
@@ -61,12 +66,7 @@ function triggerWorkflow(text) {
   }
 
   const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`;
-  const payload = {
-    ref: ref,
-    inputs: { text: text },
-  };
-
-  const res = UrlFetchApp.fetch(url, {
+  const response = UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
     headers: {
@@ -74,22 +74,24 @@ function triggerWorkflow(text) {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
     },
-    payload: JSON.stringify(payload),
+    payload: JSON.stringify({ ref: ref, inputs: { text: posttext } }),
     muteHttpExceptions: true,
   });
 
-  const code = res.getResponseCode();
+  const code = response.getResponseCode();
   if (code === 204) {
-    Logger.log('ワークフロー起動に成功しました。投稿テキスト:\n' + text);
+    Logger.log('ワークフロー起動に成功しました:\n' + posttext);
+    return true;
   } else {
-    throw new Error('ワークフロー起動に失敗 (HTTP ' + code + '): ' + res.getContentText());
+    Logger.log('ワークフロー起動に失敗 (HTTP ' + code + '): ' + response.getContentText());
+    throw new Error('X投稿の起動に失敗しました (HTTP ' + code + ')');
   }
 }
 
 /**
- * 動作確認用: 固定テキストで起動テストする。
+ * 動作確認用: 固定テキストで投稿テストする。
  * GASエディタでこの関数を選んで「実行」する。
  */
 function testTrigger() {
-  triggerWorkflow('GASからのテスト投稿です\nhttps://example.com #テスト');
+  postTextToX('GASからのテスト投稿です\nhttps://example.com #テスト');
 }
