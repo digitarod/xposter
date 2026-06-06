@@ -65,10 +65,34 @@ function postToXWithImage(content, url, imageUrl) {
     return postToX(content, url);
   }
 
-  // 画像URLはそのまま渡す。投稿側(Playwright)が実行時にDLして添付する。
+  // 画像URLを高解像度化してから渡す。投稿側(Playwright)が実行時にDLして添付する。
+  var bigImageUrl = enlargeImageUrl_(imageUrl);
   var text = buildTweetText_(content, url);
-  var ok = dispatchToActions_(text, imageUrl);
+  var ok = dispatchToActions_(text, bigImageUrl);
   return { success: ok, content: text, hasImage: true };
+}
+
+/**
+ * 画像URLをできるだけ高解像度版に変換する。
+ * 楽天のサムネイル(?_ex=WxH)はサイズ指定を大きくすると高画質になる。
+ * 対応できないURLはそのまま返す。
+ * @param {string} imageUrl
+ * @returns {string}
+ */
+function enlargeImageUrl_(imageUrl) {
+  if (!imageUrl) {
+    return imageUrl;
+  }
+  // 楽天: 既に ?_ex=WxH が付いていれば 700x700 に置換
+  if (imageUrl.indexOf('?_ex=') !== -1) {
+    return imageUrl.replace(/\?_ex=\d+x\d+/, '?_ex=700x700');
+  }
+  // 楽天サムネイルでサイズ未指定なら 700x700 を付与
+  if (imageUrl.indexOf('thumbnail.image.rakuten.co.jp') !== -1) {
+    return imageUrl + '?_ex=700x700';
+  }
+  // その他(Amazon等)はそのまま
+  return imageUrl;
 }
 
 /**
